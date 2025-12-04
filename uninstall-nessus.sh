@@ -49,7 +49,15 @@ if command -v docker &> /dev/null; then
     
     # Contar todos os containers
     TOTAL_CONTAINERS=$(docker ps -a -q | wc -l)
-    NESSUS_CONTAINERS_COUNT=$(docker ps -a --filter "ancestor=tenable/nessus" -q | wc -l)
+    
+    # Buscar containers do Nessus por imagem e por nome
+    NESSUS_CONTAINERS_BY_IMAGE=$(docker ps -a --filter "ancestor=tenableofficial/nessus" -q)
+    NESSUS_CONTAINERS_BY_NAME=$(docker ps -a --filter "name=nessus" -q)
+    
+    # Combinar e remover duplicatas
+    NESSUS_CONTAINERS=$(echo -e "$NESSUS_CONTAINERS_BY_IMAGE\n$NESSUS_CONTAINERS_BY_NAME" | sort -u | grep -v '^$')
+    NESSUS_CONTAINERS_COUNT=$(echo "$NESSUS_CONTAINERS" | grep -c .)
+    
     OTHER_CONTAINERS=$((TOTAL_CONTAINERS - NESSUS_CONTAINERS_COUNT))
     
     echo "Containers encontrados:"
@@ -57,6 +65,14 @@ if command -v docker &> /dev/null; then
     echo "  - Nessus: $NESSUS_CONTAINERS_COUNT"
     echo "  - Outros: $OTHER_CONTAINERS"
     echo ""
+    
+    # Mostrar detalhes dos containers do Nessus
+    if [ $NESSUS_CONTAINERS_COUNT -gt 0 ]; then
+        echo "Containers do Nessus identificados:"
+        docker ps -a --filter "ancestor=tenableofficial/nessus" --format "  - {{.ID}} ({{.Image}}) - {{.Status}}"
+        docker ps -a --filter "name=nessus" --format "  - {{.ID}} ({{.Image}}) - {{.Status}}" | grep -v "tenableofficial/nessus" 2>/dev/null
+        echo ""
+    fi
     
     if [ $OTHER_CONTAINERS -gt 0 ]; then
         echo "AVISO: Existem $OTHER_CONTAINERS container(s) além do Nessus!"
@@ -82,16 +98,15 @@ if command -v docker &> /dev/null; then
     fi
     
     echo "Parando containers do Nessus..."
-    NESSUS_CONTAINERS=$(docker ps -a --filter "ancestor=tenable/nessus" -q)
     if [ ! -z "$NESSUS_CONTAINERS" ]; then
-        docker stop $NESSUS_CONTAINERS 2>/dev/null && echo "Containers parados com sucesso."
-        docker rm $NESSUS_CONTAINERS 2>/dev/null && echo "Containers removidos com sucesso."
+        echo "$NESSUS_CONTAINERS" | xargs docker stop 2>/dev/null && echo "Containers parados com sucesso."
+        echo "$NESSUS_CONTAINERS" | xargs docker rm 2>/dev/null && echo "Containers removidos com sucesso."
     else
         echo "Nenhum container do Nessus encontrado."
     fi
     
     echo "Removendo imagens do Nessus..."
-    NESSUS_IMAGES=$(docker images tenable/nessus -q)
+    NESSUS_IMAGES=$(docker images tenableofficial/nessus -q)
     if [ ! -z "$NESSUS_IMAGES" ]; then
         docker rmi -f $NESSUS_IMAGES 2>/dev/null && echo "Imagens do Nessus removidas com sucesso."
     else
