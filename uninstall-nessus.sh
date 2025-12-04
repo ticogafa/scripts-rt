@@ -30,6 +30,8 @@
 #        - Adicionada verificação de permissões e melhorias no tratamento de erros
 #   v1.3 21-11-2024, Tiago Gurgel:
 #        - Tornado seguro para ambientes com múltiplos containers Docker
+#   v1.4 21-11-2024, Tiago Gurgel:
+#        - Removida opção de desinstalar Docker, apenas remove Nessus
 # --------------------------------------------------------
 
 if [ "$EUID" -ne 0 ]; then 
@@ -37,11 +39,11 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-echo "=== Iniciando desinstalação do Docker e Nessus ==="
+echo "=== Iniciando desinstalação do Nessus ==="
 echo ""
 echo "ATENÇÃO: Este script irá:"
 echo "  - Remover APENAS containers e imagens do Nessus"
-echo "  - Verificar se existem outros containers antes de remover Docker"
+echo "  - Docker permanecerá instalado no sistema"
 echo ""
 
 if command -v docker &> /dev/null; then
@@ -72,29 +74,15 @@ if command -v docker &> /dev/null; then
         docker ps -a --filter "ancestor=tenableofficial/nessus" --format "  - {{.ID}} ({{.Image}}) - {{.Status}}"
         docker ps -a --filter "name=nessus" --format "  - {{.ID}} ({{.Image}}) - {{.Status}}" | grep -v "tenableofficial/nessus" 2>/dev/null
         echo ""
-    fi
-    
-    if [ $OTHER_CONTAINERS -gt 0 ]; then
-        echo "AVISO: Existem $OTHER_CONTAINERS container(s) além do Nessus!"
-        echo "Este script irá remover APENAS os containers do Nessus."
-        echo "O Docker e outros containers NÃO serão afetados."
-        echo ""
-        read -p "Deseja continuar apenas com a remoção do Nessus? (s/N): " -n 1 -r
+        
+        read -p "Deseja remover os containers do Nessus? (s/N): " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Ss]$ ]]; then
             echo "Operação cancelada pelo usuário."
             exit 0
         fi
-        REMOVE_DOCKER=false
     else
-        echo "Nenhum outro container encontrado além do Nessus."
-        read -p "Deseja remover Docker completamente? (s/N): " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Ss]$ ]]; then
-            REMOVE_DOCKER=true
-        else
-            REMOVE_DOCKER=false
-        fi
+        echo "Nenhum container do Nessus encontrado."
     fi
     
     echo "Parando containers do Nessus..."
@@ -102,7 +90,7 @@ if command -v docker &> /dev/null; then
         echo "$NESSUS_CONTAINERS" | xargs docker stop 2>/dev/null && echo "Containers parados com sucesso."
         echo "$NESSUS_CONTAINERS" | xargs docker rm 2>/dev/null && echo "Containers removidos com sucesso."
     else
-        echo "Nenhum container do Nessus encontrado."
+        echo "Nenhum container do Nessus encontrado para parar."
     fi
     
     echo "Removendo imagens do Nessus..."
@@ -116,58 +104,13 @@ if command -v docker &> /dev/null; then
     echo "Removendo imagem hello-world..."
     docker rmi hello-world 2>/dev/null && echo "Imagem hello-world removida." || echo "Imagem hello-world não encontrada."
     
-    if [ "$REMOVE_DOCKER" = true ]; then
-        echo ""
-        echo "Parando serviço Docker..."
-        systemctl stop docker.socket 2>/dev/null && echo "docker.socket parado."
-        systemctl stop docker 2>/dev/null && echo "docker parado."
-        
-        echo "Desinstalando pacotes Docker..."
-        if apt remove --purge -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin 2>/dev/null; then
-            echo "Pacotes Docker removidos com sucesso."
-        else
-            echo "Aviso: Alguns pacotes Docker não foram encontrados ou já foram removidos."
-        fi
-        
-        echo "Removendo dependências não utilizadas..."
-        apt autoremove -y && echo "Dependências removidas."
-        
-        echo "Removendo repositório Docker..."
-        if [ -f /etc/apt/sources.list.d/docker.sources ]; then
-            rm -f /etc/apt/sources.list.d/docker.sources && echo "Repositório Docker removido."
-        else
-            echo "Repositório Docker não encontrado."
-        fi
-        
-        echo "Removendo chave GPG..."
-        if [ -f /etc/apt/keyrings/docker.asc ]; then
-            rm -f /etc/apt/keyrings/docker.asc && echo "Chave GPG removida."
-        else
-            echo "Chave GPG não encontrada."
-        fi
-        
-        echo "Removendo diretórios do Docker..."
-        [ -d /var/lib/docker ] && rm -rf /var/lib/docker && echo "Diretório /var/lib/docker removido."
-        [ -d /var/lib/containerd ] && rm -rf /var/lib/containerd && echo "Diretório /var/lib/containerd removido."
-        [ -d /etc/docker ] && rm -rf /etc/docker && echo "Diretório /etc/docker removido."
-        
-        echo "Atualizando lista de pacotes..."
-        apt update -qq && echo "Lista de pacotes atualizada."
-    else
-        echo ""
-        echo "Docker mantido no sistema (outros containers detectados)."
-    fi
 else
-    echo "Docker não está instalado."
-    REMOVE_DOCKER=false
+    echo "Docker não está instalado no sistema."
+    exit 1
 fi
 
 echo ""
 echo "=== Desinstalação concluída ==="
-if [ "$REMOVE_DOCKER" = true ]; then
-    echo "Docker e Nessus foram completamente removidos do sistema."
-else
-    echo "Apenas containers e imagens do Nessus foram removidos."
-    echo "Docker permanece instalado no sistema."
-fi
+echo "Containers e imagens do Nessus foram removidos."
+echo "Docker permanece instalado no sistema."
 echo "Verifique as mensagens acima para confirmar se todas as operações foram bem-sucedidas."
