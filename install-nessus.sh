@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Install_Nessus.sh - Executa a instalação Docker/Nessus; 
+# Install_Nessus.sh - Executa a instalação Docker/Nessus.
 #
 # Site:     https://github.com.br/newe-x
 # Autor:    Pedro Ewen <pedrohenriquewen@gmail.com>
@@ -8,58 +8,63 @@
 #
 # --------------------------------------------------------
 #
-#   O programa executa a instalação do docker usando o respositório padrão e desempenha a instalação da imagem do Tenable Nessus Oficial disponível no docker hub.
-
-#   Exemplo de uso:
-#   $ sudo ./Install_Nessus.sh 
-
+# O programa executa a instalação do Docker usando o repositório oficial
+# e realiza a instalação da imagem oficial do Tenable Nessus disponível
+# no Docker Hub.
+#
+# Exemplo de uso:
+#   $ sudo ./Install_Nessus.sh
+#
 # Ordem de requisições externas:
 # 1. http://br.archive.ubuntu.com
 # 2. https://download.docker.com
 # 3. https://hub.docker.com/r/tenable/nessus
-
+#
 # --------------------------------------------------------
 #
 # Histórico:
 #   v1.0 10-10-2024, Pedro Ewen:
-#        - Versão Inicial
+#        - Versão inicial.
 #   v1.1 21-11-2025, Pedro Ewen:
-#        - Reconstrução da lógica e construção da documentação
+#        - Reconstrução da lógica e construção da documentação.
 # --------------------------------------------------------
 
-# É necessário remover as versões antigas do docker, caso esteja instalado.
-apt remove $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc | cut -f1)
+# Remoção de versões antigas do Docker, caso existam.
+sudo apt remove -y $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc | cut -f1) 2>/dev/null
 
-# Atualizar pacotes para evitar problemas de versão
-apt update && apt upgrade -yy
+# Atualização dos pacotes.
+sudo apt update && sudo apt upgrade -y
 
-# Instalação dos certificados e o curl
-apt install ca-certificates curl
+# Instalação de certificados e curl.
+sudo apt install -y ca-certificates curl gnupg
 
-install -m 0755 -d /etc/apt/keyrings
+# Criação do diretório de keyrings.
+sudo install -m 0755 -d /etc/apt/keyrings
 
-Inserção do respositório docker ao ambiente
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+# Baixar a chave GPG.
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 
-Adicionar respositório apt
-tee /etc/apt/sources.list.d/docker.sources <<EOF
-Types: deb
-URIs: https://download.docker.com/linux/ubuntu
-Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
-Components: stable
-Signed-By: /etc/apt/keyrings/docker.asc
-EOF
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-# Atualizar pacotes para evitar problemas de versão
-apt update && apt upgrade -yy
+# Inserção do repositório Docker.
+echo \
+"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-# Instalação dos pacotes Docker
-apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+# Atualização do ambiente APT.
+sudo apt update && sudo apt upgrade -y
 
-# Validação de instalação e execução
-docker run hello-world
-systemctl status docker
+# Instalação dos pacotes Docker.
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-# Instalação do docker
+# Validação da instalação.
+sudo docker run hello-world
+sudo systemctl status docker
 
+# Download da imagem do Nessus.
+sudo docker pull tenable/nessus:latest-ubuntu
 
+# Execução do container Nessus.
+sudo docker run -d --name nessus -p 8834:8834 tenable/nessus:latest-ubuntu
